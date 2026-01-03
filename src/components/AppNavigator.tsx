@@ -4,6 +4,7 @@ import {createStackNavigator} from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {colors, typography} from '../utils/theme';
 import {NavigationParams} from '../types/index';
+import {useAuth} from '../contexts/AuthContext';
 
 // Import screens
 import HomeScreen from '../screens/HomeScreen';
@@ -13,14 +14,35 @@ import ReportsScreen from '../screens/ReportsScreen';
 import CommunityScreen from '../screens/CommunityScreen';
 import ResourcesScreen from '../screens/ResourcesScreen';
 import AdminScreen from '../screens/AdminScreen';
+import LoginScreen from '../screens/LoginScreen';
 import ReportDetailsScreen from '../screens/ReportDetailsScreen';
 import AlertDetailsScreen from '../screens/AlertDetailsScreen';
 import EventDetailsScreen from '../screens/EventDetailsScreen';
+// Personnel screens
+import PersonnelDashboardScreen from '../screens/PersonnelDashboardScreen';
+import ChatListScreen from '../screens/ChatListScreen';
+import ChatRoomScreen from '../screens/ChatRoomScreen';
+import CallOutListScreen from '../screens/CallOutListScreen';
+import CallOutDetailsScreen from '../screens/CallOutDetailsScreen';
+import SARMissionListScreen from '../screens/SARMissionListScreen';
+import SARMissionDetailsScreen from '../screens/SARMissionDetailsScreen';
+import IncidentListScreen from '../screens/IncidentListScreen';
+import IncidentDetailsScreen from '../screens/IncidentDetailsScreen';
+// New feature screens
+import VehicleListScreen from '../screens/VehicleListScreen';
+import VehicleDetailsScreen from '../screens/VehicleDetailsScreen';
+import EquipmentListScreen from '../screens/EquipmentListScreen';
+import ChecklistListScreen from '../screens/ChecklistListScreen';
+import ResourceLibraryScreen from '../screens/ResourceLibraryScreen';
+import CalloutReportFormScreen from '../screens/CalloutReportFormScreen';
+import CalloutReportReviewScreen from '../screens/CalloutReportReviewScreen';
 
 const Tab = createBottomTabNavigator<NavigationParams>();
 const Stack = createStackNavigator<NavigationParams>();
 
 const MainTabNavigator: React.FC = () => {
+  const {isAdmin, isOfficer, isMember} = useAuth();
+
   return (
     <Tab.Navigator
       screenOptions={({route}) => ({
@@ -130,21 +152,26 @@ const MainTabNavigator: React.FC = () => {
           headerTitle: 'Emergency Resources',
         }}
       />
-      <Tab.Screen
-        name="Admin"
-        component={AdminScreen}
-        options={{
-          title: 'Admin',
-          headerTitle: 'Admin Dashboard',
-        }}
-      />
+      {isAdmin && (
+        <Tab.Screen
+          name="Admin"
+          component={AdminScreen}
+          options={{
+            title: 'Admin',
+            headerTitle: 'Admin Dashboard',
+          }}
+        />
+      )}
     </Tab.Navigator>
   );
 };
 
 const AppNavigator: React.FC = () => {
+  const {isAuthenticated} = useAuth();
+
   return (
     <Stack.Navigator
+      initialRouteName={isAuthenticated ? 'Main' : 'Login'}
       screenOptions={{
         headerStyle: {
           backgroundColor: colors.primary,
@@ -159,6 +186,11 @@ const AppNavigator: React.FC = () => {
         headerBackTitleVisible: false,
       }}
     >
+      <Stack.Screen
+        name="Login"
+        component={LoginScreen}
+        options={{headerShown: false}}
+      />
       <Stack.Screen
         name="Main"
         component={MainTabNavigator}
@@ -186,6 +218,136 @@ const AppNavigator: React.FC = () => {
         options={{
           title: 'Event Details',
           headerTitle: 'Event Details',
+        }}
+      />
+      {/* Personnel Screens */}
+      <Stack.Screen
+        name="PersonnelDashboard"
+        component={PersonnelDashboardScreen}
+        options={{
+          title: 'Dashboard',
+          headerTitle: 'Personnel Dashboard',
+        }}
+      />
+      <Stack.Screen
+        name="Chat"
+        component={ChatListScreen}
+        options={{
+          title: 'Chat',
+          headerTitle: 'Internal Chat',
+        }}
+      />
+      <Stack.Screen
+        name="ChatRoom"
+        component={ChatRoomScreen}
+        options={{
+          title: 'Chat Room',
+          headerTitle: 'Chat Room',
+        }}
+      />
+      <Stack.Screen
+        name="CallOuts"
+        component={CallOutListScreen}
+        options={{
+          title: 'Call-Outs',
+          headerTitle: 'Call-Outs',
+        }}
+      />
+      <Stack.Screen
+        name="CallOutDetails"
+        component={CallOutDetailsScreen}
+        options={{
+          title: 'Call-Out Details',
+          headerTitle: 'Call-Out Details',
+        }}
+      />
+      <Stack.Screen
+        name="SARMissions"
+        component={SARMissionListScreen}
+        options={{
+          title: 'SAR Missions',
+          headerTitle: 'SAR Missions',
+        }}
+      />
+      <Stack.Screen
+        name="SARMissionDetails"
+        component={SARMissionDetailsScreen}
+        options={{
+          title: 'SAR Mission Details',
+          headerTitle: 'SAR Mission Details',
+        }}
+      />
+      <Stack.Screen
+        name="Incidents"
+        component={IncidentListScreen}
+        options={{
+          title: 'Incidents',
+          headerTitle: 'Incidents',
+        }}
+      />
+      <Stack.Screen
+        name="IncidentDetails"
+        component={IncidentDetailsScreen}
+        options={{
+          title: 'Incident Details',
+          headerTitle: 'Incident Details',
+        }}
+      />
+      {/* New feature screens */}
+      <Stack.Screen
+        name="Vehicles"
+        component={VehicleListScreen}
+        options={{
+          title: 'Vehicles',
+          headerTitle: 'Vehicle Management',
+        }}
+      />
+      <Stack.Screen
+        name="VehicleDetails"
+        component={VehicleDetailsScreen}
+        options={{
+          title: 'Vehicle Details',
+          headerTitle: 'Vehicle Details',
+        }}
+      />
+      <Stack.Screen
+        name="Equipment"
+        component={EquipmentListScreen}
+        options={{
+          title: 'Equipment',
+          headerTitle: 'Equipment Management',
+        }}
+      />
+      <Stack.Screen
+        name="Checklists"
+        component={ChecklistListScreen}
+        options={{
+          title: 'Checklists',
+          headerTitle: 'Checklists',
+        }}
+      />
+      <Stack.Screen
+        name="ResourceLibrary"
+        component={ResourceLibraryScreen}
+        options={{
+          title: 'Resources',
+          headerTitle: 'Resource Library',
+        }}
+      />
+      <Stack.Screen
+        name="CalloutReportForm"
+        component={CalloutReportFormScreen}
+        options={{
+          title: 'Callout Report',
+          headerTitle: 'Callout Report',
+        }}
+      />
+      <Stack.Screen
+        name="CalloutReportReview"
+        component={CalloutReportReviewScreen}
+        options={{
+          title: 'Review Report',
+          headerTitle: 'Review Callout Report',
         }}
       />
     </Stack.Navigator>

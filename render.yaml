@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: apsar-api
+    env: node
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://apsar-emergency-app.onrender.com,https://api.anaconda-deerlodge-emergency.gov
+    healthCheckPath: /health
+

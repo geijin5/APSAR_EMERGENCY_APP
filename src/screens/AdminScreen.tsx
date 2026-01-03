@@ -10,86 +10,175 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
+import {Card, Chip, Button, Surface, Divider, List} from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import EmergencyHeader from '../components/EmergencyHeader';
-import EmergencyCard from '../components/EmergencyCard';
-import EmergencyButton from '../components/EmergencyButton';
-import StatusIndicator from '../components/StatusIndicator';
-import {colors, typography, spacing} from '../utils/theme';
-import {MapZone, Alert as AlertType, EmergencyReport} from '../types/index';
+import {useAuth} from '../contexts/AuthContext';
+import {apiService} from '../services/ApiService';
+import {colors, typography, spacing, borderRadius, shadows} from '../utils/theme';
+import {MapZone, Alert as AlertType, EmergencyReport, User, CallOut, SARMission, Incident} from '../types/index';
+
+interface AnalyticsData {
+  totalUsers: number;
+  activeUsers: number;
+  totalAlerts: number;
+  activeAlerts: number;
+  totalReports: number;
+  pendingReports: number;
+  activeMissions: number;
+  activeCallOuts: number;
+  activeIncidents: number;
+  alertsLast24h: number;
+  reportsLast24h: number;
+  averageResponseTime: number; // in minutes
+}
+
+interface AuditLogEntry {
+  id: string;
+  userId: string;
+  userName: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  timestamp: Date;
+  details?: string;
+}
 
 const AdminScreen: React.FC = () => {
+  const {user, isCommand} = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<
+    'overview' | 'analytics' | 'users' | 'zones' | 'alerts' | 'reports' | 'audit'
+  >('overview');
+  
+  // Data states
+  const [analytics, setAnalytics] = useState<AnalyticsData>({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalAlerts: 0,
+    activeAlerts: 0,
+    totalReports: 0,
+    pendingReports: 0,
+    activeMissions: 0,
+    activeCallOuts: 0,
+    activeIncidents: 0,
+    alertsLast24h: 0,
+    reportsLast24h: 0,
+    averageResponseTime: 0,
+  });
+  const [users, setUsers] = useState<User[]>([]);
   const [zones, setZones] = useState<MapZone[]>([]);
   const [alerts, setAlerts] = useState<AlertType[]>([]);
   const [reports, setReports] = useState<EmergencyReport[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  
+  // Modal states
   const [showCreateZoneModal, setShowCreateZoneModal] = useState(false);
   const [showCreateAlertModal, setShowCreateAlertModal] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<'overview' | 'zones' | 'alerts' | 'reports'>('overview');
-
-  // Zone creation form
+  const [showUserModal, setShowUserModal] = useState(false);
+  
+  // Form states
   const [zoneName, setZoneName] = useState('');
   const [zoneType, setZoneType] = useState<MapZone['type']>('restricted');
   const [zoneDescription, setZoneDescription] = useState('');
-
-  // Alert creation form
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState<AlertType['type']>('info');
   const [alertPriority, setAlertPriority] = useState<AlertType['priority']>('medium');
+  const [alertTargetAudience, setAlertTargetAudience] = useState<'public' | 'personnel' | 'all'>('all');
 
   useEffect(() => {
     loadAdminData();
   }, []);
 
   const loadAdminData = async () => {
-    // In a real app, this would fetch from a server
-    // For now, we'll use mock data
-    const mockZones: MapZone[] = [
-      {
-        id: '1',
-        name: 'Active Search Zone - Pintler Mountains',
-        type: 'search',
-        coordinates: [
-          {latitude: 45.9231, longitude: -113.3943},
-          {latitude: 45.9281, longitude: -113.3893},
-          {latitude: 45.9331, longitude: -113.3943},
-          {latitude: 45.9281, longitude: -113.3993},
-        ],
-        description: 'Active search operation in progress',
-        startTime: new Date(),
-        isActive: true,
-      },
-    ];
+    try {
+      // Load analytics
+      const analyticsData = await apiService.getPersonnelDashboard();
+      // Transform to analytics format
+      setAnalytics({
+        totalUsers: analyticsData.totalUsers || 0,
+        activeUsers: analyticsData.activeUsers || 0,
+        totalAlerts: analyticsData.totalAlerts || 0,
+        activeAlerts: analyticsData.activeAlerts || 0,
+        totalReports: analyticsData.totalReports || 0,
+        pendingReports: analyticsData.pendingReports || 0,
+        activeMissions: analyticsData.activeMissions || 0,
+        activeCallOuts: analyticsData.activeCallOuts || 0,
+        activeIncidents: analyticsData.activeIncidents || 0,
+        alertsLast24h: analyticsData.alertsLast24h || 0,
+        reportsLast24h: analyticsData.reportsLast24h || 0,
+        averageResponseTime: analyticsData.averageResponseTime || 0,
+      });
 
-    const mockAlerts: AlertType[] = [
-      {
-        id: '1',
-        title: 'Active Search Operation',
-        message: 'Search and rescue operation in progress in Pintler Mountains.',
-        type: 'search',
-        priority: 'high',
-        timestamp: new Date(),
-        isRead: false,
-      },
-    ];
+      // Load other data
+      const [zonesData, alertsData, reportsData] = await Promise.all([
+        apiService.getPersonnelMapZones(),
+        apiService.getPersonnelAlerts(),
+        // Mock reports for now
+        Promise.resolve([]),
+      ]);
+      
+      setZones(zonesData);
+      setAlerts(alertsData);
+      setReports(reportsData);
 
-    const mockReports: EmergencyReport[] = [
-      {
-        id: '1',
-        type: 'missing_person',
-        title: 'Missing Hiker - John Smith',
-        description: 'Last seen on Pintler Trail near Georgetown Lake.',
-        location: {latitude: 45.9231, longitude: -113.3943},
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        status: 'investigating',
-        priority: 'high',
-      },
-    ];
+      // Load users (if command)
+      if (isCommand) {
+        // Mock users for now - would call API in production
+        setUsers([
+          {
+            id: '1',
+            name: 'John Doe',
+            email: 'john@example.com',
+            phone: '(406) 555-0100',
+            role: 'personnel',
+            isVolunteer: true,
+            isAdmin: false,
+            isActive: true,
+            twoFactorEnabled: false,
+            preferences: {
+              notifications: {
+                emergency: true,
+                weather: true,
+                traffic: true,
+                events: true,
+                sms: false,
+                email: true,
+                push: true,
+              },
+              location: {
+                shareLocation: false,
+                autoLocationUpdates: false,
+              },
+              accessibility: {
+                highContrast: false,
+                largeText: false,
+                voiceOver: false,
+              },
+            },
+          },
+        ]);
+      }
 
-    setZones(mockZones);
-    setAlerts(mockAlerts);
-    setReports(mockReports);
+      // Load audit logs (if command)
+      if (isCommand) {
+        // Mock audit logs
+        setAuditLogs([
+          {
+            id: '1',
+            userId: '1',
+            userName: 'John Doe',
+            action: 'CREATE_ALERT',
+            entityType: 'alert',
+            entityId: '1',
+            timestamp: new Date(),
+            details: 'Created high-priority emergency alert',
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to load admin data:', error);
+    }
   };
 
   const onRefresh = async () => {
@@ -98,145 +187,265 @@ const AdminScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const handleCreateZone = () => {
+  const handleCreateZone = async () => {
     if (!zoneName.trim()) {
       Alert.alert('Error', 'Please enter a zone name.');
       return;
     }
 
-    const newZone: MapZone = {
-      id: Date.now().toString(),
-      name: zoneName.trim(),
-      type: zoneType,
-      coordinates: [], // In a real app, this would be set by drawing on a map
-      description: zoneDescription.trim(),
-      startTime: new Date(),
-      isActive: true,
-    };
-
-    setZones(prev => [...prev, newZone]);
-    setShowCreateZoneModal(false);
-    
-    // Reset form
-    setZoneName('');
-    setZoneDescription('');
-    
-    Alert.alert('Success', 'Zone created successfully.');
+    try {
+      await apiService.createMapZone({
+        name: zoneName.trim(),
+        type: zoneType,
+        description: zoneDescription.trim(),
+        isActive: true,
+        isPublic: true,
+        coordinates: [],
+      });
+      
+      setShowCreateZoneModal(false);
+      setZoneName('');
+      setZoneDescription('');
+      await loadAdminData();
+      Alert.alert('Success', 'Zone created successfully.');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create zone.');
+    }
   };
 
-  const handleCreateAlert = () => {
+  const handleCreateAlert = async () => {
     if (!alertTitle.trim() || !alertMessage.trim()) {
       Alert.alert('Error', 'Please fill in all required fields.');
       return;
     }
 
-    const newAlert: AlertType = {
-      id: Date.now().toString(),
-      title: alertTitle.trim(),
-      message: alertMessage.trim(),
-      type: alertType,
-      priority: alertPriority,
-      timestamp: new Date(),
-      isRead: false,
-    };
-
-    setAlerts(prev => [...prev, newAlert]);
-    setShowCreateAlertModal(false);
-    
-    // Reset form
-    setAlertTitle('');
-    setAlertMessage('');
-    
-    Alert.alert('Success', 'Alert created and sent to all users.');
-  };
-
-  const toggleZoneActive = (zoneId: string) => {
-    setZones(prev => prev.map(zone => 
-      zone.id === zoneId ? { ...zone, isActive: !zone.isActive } : zone
-    ));
-  };
-
-  const updateReportStatus = (reportId: string, status: EmergencyReport['status']) => {
-    setReports(prev => prev.map(report => 
-      report.id === reportId ? { ...report, status } : report
-    ));
+    try {
+      await apiService.createAlert({
+        title: alertTitle.trim(),
+        message: alertMessage.trim(),
+        type: alertType,
+        priority: alertPriority,
+        targetAudience: alertTargetAudience,
+        isActive: true,
+      });
+      
+      setShowCreateAlertModal(false);
+      setAlertTitle('');
+      setAlertMessage('');
+      await loadAdminData();
+      Alert.alert('Success', 'Alert created and sent.');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create alert.');
+    }
   };
 
   const renderOverview = () => (
     <View style={styles.overviewContainer}>
+      {/* Quick Stats */}
       <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{zones.filter(z => z.isActive).length}</Text>
-          <Text style={styles.statLabel}>Active Zones</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{alerts.filter(a => !a.isRead).length}</Text>
-          <Text style={styles.statLabel}>Unread Alerts</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{reports.filter(r => r.status === 'pending').length}</Text>
+        <Surface style={styles.statCard}>
+          <Icon name="people" size={32} color={colors.primary} />
+          <Text style={styles.statNumber}>{analytics.totalUsers}</Text>
+          <Text style={styles.statLabel}>Total Users</Text>
+        </Surface>
+        <Surface style={styles.statCard}>
+          <Icon name="notifications" size={32} color={colors.warning} />
+          <Text style={styles.statNumber}>{analytics.activeAlerts}</Text>
+          <Text style={styles.statLabel}>Active Alerts</Text>
+        </Surface>
+        <Surface style={styles.statCard}>
+          <Icon name="report-problem" size={32} color={colors.error} />
+          <Text style={styles.statNumber}>{analytics.pendingReports}</Text>
           <Text style={styles.statLabel}>Pending Reports</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{reports.filter(r => r.status === 'investigating').length}</Text>
-          <Text style={styles.statLabel}>Active Investigations</Text>
-        </View>
+        </Surface>
+        <Surface style={styles.statCard}>
+          <Icon name="search" size={32} color={colors.info} />
+          <Text style={styles.statNumber}>{analytics.activeMissions}</Text>
+          <Text style={styles.statLabel}>Active Missions</Text>
+        </Surface>
       </View>
 
-      <EmergencyCard
-        type="info"
-        title="Quick Actions"
-        description="Common administrative tasks"
-      >
-        <View style={styles.quickActions}>
-          <EmergencyButton
-            title="Create Zone"
-            icon={<Icon name="add-location" size={20} color={colors.surface} />}
-            onPress={() => setShowCreateZoneModal(true)}
-            variant="primary"
-            size="medium"
-            style={styles.quickActionButton}
-          />
-          <EmergencyButton
-            title="Send Alert"
-            icon={<Icon name="notifications" size={20} color={colors.surface} />}
-            onPress={() => setShowCreateAlertModal(true)}
-            variant="warning"
-            size="medium"
-            style={styles.quickActionButton}
-          />
+      {/* Activity Summary */}
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text style={styles.sectionTitle}>Recent Activity (24h)</Text>
+          <View style={styles.activityRow}>
+            <View style={styles.activityItem}>
+              <Icon name="notifications-active" size={20} color={colors.textSecondary} />
+              <Text style={styles.activityText}>{analytics.alertsLast24h} Alerts</Text>
+            </View>
+            <View style={styles.activityItem}>
+              <Icon name="report" size={20} color={colors.textSecondary} />
+              <Text style={styles.activityText}>{analytics.reportsLast24h} Reports</Text>
+            </View>
+          </View>
+        </Card.Content>
+      </Card>
+
+      {/* Quick Actions */}
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.quickActions}>
+            <Button
+              mode="contained"
+              icon="add-location"
+              onPress={() => setShowCreateZoneModal(true)}
+              style={styles.quickActionButton}
+            >
+              Create Zone
+            </Button>
+            <Button
+              mode="contained"
+              icon="notifications"
+              onPress={() => setShowCreateAlertModal(true)}
+              style={styles.quickActionButton}
+              buttonColor={colors.warning}
+            >
+              Send Alert
+            </Button>
+          </View>
+        </Card.Content>
+      </Card>
+    </View>
+  );
+
+  const renderAnalytics = () => (
+    <View style={styles.tabContent}>
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text style={styles.sectionTitle}>User Analytics</Text>
+          <View style={styles.analyticsRow}>
+            <View style={styles.analyticsItem}>
+              <Text style={styles.analyticsValue}>{analytics.totalUsers}</Text>
+              <Text style={styles.analyticsLabel}>Total Users</Text>
+            </View>
+            <View style={styles.analyticsItem}>
+              <Text style={styles.analyticsValue}>{analytics.activeUsers}</Text>
+              <Text style={styles.analyticsLabel}>Active Users</Text>
+            </View>
+            <View style={styles.analyticsItem}>
+              <Text style={styles.analyticsValue}>
+                {analytics.totalUsers > 0
+                  ? Math.round((analytics.activeUsers / analytics.totalUsers) * 100)
+                  : 0}%
+              </Text>
+              <Text style={styles.analyticsLabel}>Active Rate</Text>
+            </View>
+          </View>
+        </Card.Content>
+      </Card>
+
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text style={styles.sectionTitle}>Alert Analytics</Text>
+          <View style={styles.analyticsRow}>
+            <View style={styles.analyticsItem}>
+              <Text style={styles.analyticsValue}>{analytics.totalAlerts}</Text>
+              <Text style={styles.analyticsLabel}>Total Alerts</Text>
+            </View>
+            <View style={styles.analyticsItem}>
+              <Text style={styles.analyticsValue}>{analytics.activeAlerts}</Text>
+              <Text style={styles.analyticsLabel}>Active</Text>
+            </View>
+            <View style={styles.analyticsItem}>
+              <Text style={styles.analyticsValue}>{analytics.alertsLast24h}</Text>
+              <Text style={styles.analyticsLabel}>Last 24h</Text>
+            </View>
+          </View>
+        </Card.Content>
+      </Card>
+
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text style={styles.sectionTitle}>Operational Metrics</Text>
+          <View style={styles.metricsList}>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Active Missions</Text>
+              <Text style={styles.metricValue}>{analytics.activeMissions}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Active Call-Outs</Text>
+              <Text style={styles.metricValue}>{analytics.activeCallOuts}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Active Incidents</Text>
+              <Text style={styles.metricValue}>{analytics.activeIncidents}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Avg Response Time</Text>
+              <Text style={styles.metricValue}>
+                {analytics.averageResponseTime > 0
+                  ? `${analytics.averageResponseTime} min`
+                  : 'N/A'}
+              </Text>
+            </View>
+          </View>
+        </Card.Content>
+      </Card>
+    </View>
+  );
+
+  const renderUsers = () => (
+    <View style={styles.tabContent}>
+      {users.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Icon name="people-outline" size={64} color={colors.textSecondary} />
+          <Text style={styles.emptyStateText}>No users found</Text>
         </View>
-      </EmergencyCard>
+      ) : (
+        users.map((user) => (
+          <Card key={user.id} style={styles.card}>
+            <Card.Content>
+              <View style={styles.userHeader}>
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{user.name}</Text>
+                  <Text style={styles.userEmail}>{user.email}</Text>
+                </View>
+                <Chip
+                  icon={user.isActive ? 'check-circle' : 'cancel'}
+                  style={[
+                    styles.roleChip,
+                    user.isActive ? styles.activeChip : styles.inactiveChip,
+                  ]}
+                  textStyle={styles.roleChipText}
+                >
+                  {user.role.toUpperCase()}
+                </Chip>
+              </View>
+              <View style={styles.userMeta}>
+                <Text style={styles.userMetaText}>Phone: {user.phone || 'N/A'}</Text>
+                {user.unit && <Text style={styles.userMetaText}>Unit: {user.unit}</Text>}
+              </View>
+            </Card.Content>
+          </Card>
+        ))
+      )}
     </View>
   );
 
   const renderZones = () => (
     <View style={styles.tabContent}>
       {zones.map((zone) => (
-        <EmergencyCard
-          key={zone.id}
-          title={zone.name}
-          description={zone.description}
-          type={zone.isActive ? 'info' : 'warning'}
-          icon="location-on"
-        >
-          <View style={styles.zoneFooter}>
-            <StatusIndicator
-              status={zone.isActive ? 'active' : 'inactive'}
-              label={zone.isActive ? 'Active' : 'Inactive'}
-              size="small"
-            />
-            <View style={styles.zoneActions}>
-              <EmergencyButton
-                title={zone.isActive ? 'Deactivate' : 'Activate'}
-                onPress={() => toggleZoneActive(zone.id)}
-                variant={zone.isActive ? 'warning' : 'success'}
-                size="small"
-                style={styles.actionButton}
-              />
+        <Card key={zone.id} style={styles.card}>
+          <Card.Content>
+            <View style={styles.zoneHeader}>
+              <Text style={styles.zoneTitle}>{zone.name}</Text>
+              <Chip
+                icon={zone.isActive ? 'check-circle' : 'cancel'}
+                style={[
+                  styles.statusChip,
+                  zone.isActive ? styles.activeChip : styles.inactiveChip,
+                ]}
+                textStyle={styles.statusChipText}
+              >
+                {zone.isActive ? 'Active' : 'Inactive'}
+              </Chip>
             </View>
-          </View>
-        </EmergencyCard>
+            <Text style={styles.zoneDescription}>{zone.description}</Text>
+            <Text style={styles.zoneType}>Type: {zone.type.toUpperCase()}</Text>
+          </Card.Content>
+        </Card>
       ))}
     </View>
   );
@@ -244,121 +453,132 @@ const AdminScreen: React.FC = () => {
   const renderAlerts = () => (
     <View style={styles.tabContent}>
       {alerts.map((alert) => (
-        <EmergencyCard
-          key={alert.id}
-          title={alert.title}
-          description={alert.message}
-          type={alert.priority === 'high' ? 'emergency' : alert.priority === 'medium' ? 'warning' : 'info'}
-          icon="notifications"
-          timestamp={alert.timestamp}
-        >
-          <View style={styles.alertFooter}>
-            <Text style={styles.alertType}>{alert.type.toUpperCase()} - {alert.priority.toUpperCase()}</Text>
-            <StatusIndicator
-              status={alert.isRead ? 'success' : 'pending'}
-              label={alert.isRead ? 'Sent' : 'Draft'}
-              size="small"
-            />
-          </View>
-        </EmergencyCard>
+        <Card key={alert.id} style={styles.card}>
+          <Card.Content>
+            <View style={styles.alertHeader}>
+              <Text style={styles.alertTitle}>{alert.title}</Text>
+              <Chip
+                style={[
+                  styles.priorityChip,
+                  alert.priority === 'high'
+                    ? styles.priorityHigh
+                    : alert.priority === 'medium'
+                    ? styles.priorityMedium
+                    : styles.priorityLow,
+                ]}
+                textStyle={styles.priorityChipText}
+              >
+                {alert.priority.toUpperCase()}
+              </Chip>
+            </View>
+            <Text style={styles.alertMessage}>{alert.message}</Text>
+            <Text style={styles.alertMeta}>
+              Type: {alert.type} | Target: {alert.targetAudience || 'all'}
+            </Text>
+          </Card.Content>
+        </Card>
       ))}
     </View>
   );
 
   const renderReports = () => (
     <View style={styles.tabContent}>
-      {reports.map((report) => (
-        <EmergencyCard
-          key={report.id}
-          title={report.title}
-          description={report.description}
-          type={report.priority === 'high' ? 'emergency' : report.priority === 'medium' ? 'warning' : 'info'}
-          icon="report-problem"
-          timestamp={report.timestamp}
-        >
-          <View style={styles.reportFooter}>
-            <StatusIndicator
-              status={report.status === 'resolved' ? 'success' : report.status === 'investigating' ? 'pending' : 'warning'}
-              label={report.status.toUpperCase()}
-              size="small"
-            />
-            <View style={styles.reportActions}>
-              {report.status === 'pending' && (
-                <EmergencyButton
-                  title="Investigate"
-                  onPress={() => updateReportStatus(report.id, 'investigating')}
-                  variant="info"
-                  size="small"
-                  style={styles.actionButton}
-                />
-              )}
-              {report.status === 'investigating' && (
-                <>
-                  <EmergencyButton
-                    title="Resolve"
-                    onPress={() => updateReportStatus(report.id, 'resolved')}
-                    variant="success"
-                    size="small"
-                    style={styles.actionButton}
-                  />
-                  <EmergencyButton
-                    title="False Alarm"
-                    onPress={() => updateReportStatus(report.id, 'false_alarm')}
-                    variant="secondary"
-                    size="small"
-                    style={styles.actionButton}
-                  />
-                </>
-              )}
-            </View>
-          </View>
-        </EmergencyCard>
-      ))}
+      {reports.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Icon name="report-problem" size={64} color={colors.textSecondary} />
+          <Text style={styles.emptyStateText}>No reports</Text>
+        </View>
+      ) : (
+        reports.map((report) => (
+          <Card key={report.id} style={styles.card}>
+            <Card.Content>
+              <Text style={styles.reportTitle}>{report.title}</Text>
+              <Text style={styles.reportDescription}>{report.description}</Text>
+              <Text style={styles.reportStatus}>Status: {report.status}</Text>
+            </Card.Content>
+          </Card>
+        ))
+      )}
     </View>
   );
 
+  const renderAuditLogs = () => (
+    <View style={styles.tabContent}>
+      {auditLogs.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Icon name="history" size={64} color={colors.textSecondary} />
+          <Text style={styles.emptyStateText}>No audit logs</Text>
+        </View>
+      ) : (
+        auditLogs.map((log) => (
+          <Card key={log.id} style={styles.card}>
+            <Card.Content>
+              <View style={styles.auditHeader}>
+                <Text style={styles.auditAction}>{log.action}</Text>
+                <Text style={styles.auditTime}>
+                  {new Date(log.timestamp).toLocaleString()}
+                </Text>
+              </View>
+              <Text style={styles.auditUser}>{log.userName}</Text>
+              {log.details && <Text style={styles.auditDetails}>{log.details}</Text>}
+            </Card.Content>
+          </Card>
+        ))
+      )}
+    </View>
+  );
+
+  const tabs = [
+    {id: 'overview', label: 'Overview', icon: 'dashboard'},
+    {id: 'analytics', label: 'Analytics', icon: 'analytics'},
+    ...(isCommand ? [{id: 'users', label: 'Users', icon: 'people'}] : []),
+    {id: 'zones', label: 'Zones', icon: 'map'},
+    {id: 'alerts', label: 'Alerts', icon: 'notifications'},
+    {id: 'reports', label: 'Reports', icon: 'report-problem'},
+    ...(isCommand ? [{id: 'audit', label: 'Audit Log', icon: 'history'}] : []),
+  ];
+
   return (
     <View style={styles.container}>
-      <EmergencyHeader
-        title="Admin Dashboard"
-        subtitle="Manage zones, alerts, and reports"
-      />
+      <Surface style={styles.header}>
+        <Text style={styles.headerTitle}>Admin Dashboard</Text>
+        <Text style={styles.headerSubtitle}>
+          {isCommand ? 'Command Center' : 'Administration'}
+        </Text>
+      </Surface>
 
       {/* Tab Navigation */}
-      <View style={styles.tabNavigation}>
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 'overview' && styles.activeTab]}
-          onPress={() => setSelectedTab('overview')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'overview' && styles.activeTabText]}>
-            Overview
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 'zones' && styles.activeTab]}
-          onPress={() => setSelectedTab('zones')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'zones' && styles.activeTabText]}>
-            Zones
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 'alerts' && styles.activeTab]}
-          onPress={() => setSelectedTab('alerts')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'alerts' && styles.activeTabText]}>
-            Alerts
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 'reports' && styles.activeTab]}
-          onPress={() => setSelectedTab('reports')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'reports' && styles.activeTabText]}>
-            Reports
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabScrollView}
+        contentContainerStyle={styles.tabNavigation}
+      >
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.id}
+            style={[
+              styles.tab,
+              selectedTab === tab.id && styles.activeTab,
+            ]}
+            onPress={() => setSelectedTab(tab.id as any)}
+          >
+            <Icon
+              name={tab.icon}
+              size={20}
+              color={selectedTab === tab.id ? colors.primary : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.tabText,
+                selectedTab === tab.id && styles.activeTabText,
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       <ScrollView
         style={styles.content}
@@ -367,163 +587,93 @@ const AdminScreen: React.FC = () => {
         }
       >
         {selectedTab === 'overview' && renderOverview()}
+        {selectedTab === 'analytics' && renderAnalytics()}
+        {selectedTab === 'users' && renderUsers()}
         {selectedTab === 'zones' && renderZones()}
         {selectedTab === 'alerts' && renderAlerts()}
         {selectedTab === 'reports' && renderReports()}
+        {selectedTab === 'audit' && renderAuditLogs()}
       </ScrollView>
 
       {/* Create Zone Modal */}
-      <Modal visible={showCreateZoneModal} animationType="slide" presentationStyle="pageSheet">
+      <Modal
+        visible={showCreateZoneModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
         <View style={styles.modalContainer}>
-          <EmergencyHeader
-            title="Create Zone"
-            subtitle="Add a new emergency zone"
-            showNotifications={false}
-          />
+          <Surface style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Create Zone</Text>
+            <TouchableOpacity onPress={() => setShowCreateZoneModal(false)}>
+              <Icon name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+          </Surface>
           
           <ScrollView style={styles.modalContent}>
-            <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Zone Name *</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter zone name"
-                value={zoneName}
-                onChangeText={setZoneName}
-              />
-            </View>
-
-            <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Zone Type</Text>
-              <View style={styles.typeButtons}>
-                {(['restricted', 'caution', 'clear', 'search', 'detour', 'parade'] as const).map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[styles.typeButton, zoneType === type && styles.activeTypeButton]}
-                    onPress={() => setZoneType(type)}
-                  >
-                    <Text style={[styles.typeButtonText, zoneType === type && styles.activeTypeButtonText]}>
-                      {type.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Description</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea]}
-                placeholder="Zone description"
-                value={zoneDescription}
-                onChangeText={setZoneDescription}
-                multiline
-                numberOfLines={3}
-              />
-            </View>
+            <TextInput
+              label="Zone Name"
+              value={zoneName}
+              onChangeText={setZoneName}
+              mode="outlined"
+              style={styles.modalInput}
+            />
+            <TextInput
+              label="Description"
+              value={zoneDescription}
+              onChangeText={setZoneDescription}
+              mode="outlined"
+              multiline
+              style={styles.modalInput}
+            />
           </ScrollView>
 
-          <View style={styles.modalActions}>
-            <EmergencyButton
-              title="Cancel"
-              onPress={() => setShowCreateZoneModal(false)}
-              variant="secondary"
-              size="large"
-              style={styles.modalButton}
-            />
-            <EmergencyButton
-              title="Create Zone"
-              onPress={handleCreateZone}
-              variant="primary"
-              size="large"
-              style={styles.modalButton}
-            />
-          </View>
+          <Surface style={styles.modalActions}>
+            <Button onPress={() => setShowCreateZoneModal(false)}>Cancel</Button>
+            <Button mode="contained" onPress={handleCreateZone}>
+              Create
+            </Button>
+          </Surface>
         </View>
       </Modal>
 
       {/* Create Alert Modal */}
-      <Modal visible={showCreateAlertModal} animationType="slide" presentationStyle="pageSheet">
+      <Modal
+        visible={showCreateAlertModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
         <View style={styles.modalContainer}>
-          <EmergencyHeader
-            title="Create Alert"
-            subtitle="Send emergency alert to all users"
-            showNotifications={false}
-          />
+          <Surface style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Create Alert</Text>
+            <TouchableOpacity onPress={() => setShowCreateAlertModal(false)}>
+              <Icon name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+          </Surface>
           
           <ScrollView style={styles.modalContent}>
-            <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Alert Title *</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter alert title"
-                value={alertTitle}
-                onChangeText={setAlertTitle}
-              />
-            </View>
-
-            <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Alert Message *</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea]}
-                placeholder="Enter alert message"
-                value={alertMessage}
-                onChangeText={setAlertMessage}
-                multiline
-                numberOfLines={4}
-              />
-            </View>
-
-            <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Alert Type</Text>
-              <View style={styles.typeButtons}>
-                {(['emergency', 'warning', 'info', 'search', 'weather', 'traffic', 'event'] as const).map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[styles.typeButton, alertType === type && styles.activeTypeButton]}
-                    onPress={() => setAlertType(type)}
-                  >
-                    <Text style={[styles.typeButtonText, alertType === type && styles.activeTypeButtonText]}>
-                      {type.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Priority</Text>
-              <View style={styles.priorityButtons}>
-                {(['low', 'medium', 'high'] as const).map((level) => (
-                  <TouchableOpacity
-                    key={level}
-                    style={[styles.priorityButton, alertPriority === level && styles.activePriorityButton]}
-                    onPress={() => setAlertPriority(level)}
-                  >
-                    <Text style={[styles.priorityButtonText, alertPriority === level && styles.activePriorityButtonText]}>
-                      {level.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <TextInput
+              label="Title"
+              value={alertTitle}
+              onChangeText={setAlertTitle}
+              mode="outlined"
+              style={styles.modalInput}
+            />
+            <TextInput
+              label="Message"
+              value={alertMessage}
+              onChangeText={setAlertMessage}
+              mode="outlined"
+              multiline
+              style={styles.modalInput}
+            />
           </ScrollView>
 
-          <View style={styles.modalActions}>
-            <EmergencyButton
-              title="Cancel"
-              onPress={() => setShowCreateAlertModal(false)}
-              variant="secondary"
-              size="large"
-              style={styles.modalButton}
-            />
-            <EmergencyButton
-              title="Send Alert"
-              onPress={handleCreateAlert}
-              variant="warning"
-              size="large"
-              style={styles.modalButton}
-            />
-          </View>
+          <Surface style={styles.modalActions}>
+            <Button onPress={() => setShowCreateAlertModal(false)}>Cancel</Button>
+            <Button mode="contained" onPress={handleCreateAlert} buttonColor={colors.warning}>
+              Send Alert
+            </Button>
+          </Surface>
         </View>
       </Modal>
     </View>
@@ -535,27 +685,50 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  header: {
+    padding: spacing.lg,
+    backgroundColor: colors.primary,
+    ...shadows.medium,
+  },
+  headerTitle: {
+    ...typography.h3,
+    color: colors.surface,
+  },
+  headerSubtitle: {
+    ...typography.body,
+    color: colors.surface,
+    opacity: 0.9,
+    marginTop: spacing.xs,
+  },
+  tabScrollView: {
+    maxHeight: 60,
+  },
   tabNavigation: {
-    flexDirection: 'row',
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.mediumGray,
+    paddingHorizontal: spacing.sm,
   },
   tab: {
-    flex: 1,
-    paddingVertical: spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    marginRight: spacing.sm,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   activeTab: {
-    backgroundColor: colors.primary,
+    borderBottomColor: colors.primary,
   },
   tabText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginLeft: spacing.xs,
   },
   activeTabText: {
-    color: colors.surface,
+    color: colors.primary,
+    fontWeight: '600',
   },
   content: {
     flex: 1,
@@ -566,26 +739,49 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: spacing.lg,
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
   },
   statCard: {
     width: '48%',
-    backgroundColor: colors.surface,
     padding: spacing.md,
-    borderRadius: 8,
-    margin: '1%',
+    borderRadius: borderRadius.md,
     alignItems: 'center',
-    ...colors.shadows.medium,
+    marginBottom: spacing.md,
+    ...shadows.small,
   },
   statNumber: {
-    ...typography.h2,
-    color: colors.primary,
-    fontWeight: 'bold',
+    ...typography.h3,
+    color: colors.text,
+    marginTop: spacing.sm,
   },
   statLabel: {
-    ...typography.bodySmall,
+    ...typography.caption,
     color: colors.textSecondary,
+    marginTop: spacing.xs,
     textAlign: 'center',
+  },
+  card: {
+    marginBottom: spacing.md,
+    marginHorizontal: spacing.md,
+    ...shadows.small,
+  },
+  sectionTitle: {
+    ...typography.h4,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  activityItem: {
+    alignItems: 'center',
+  },
+  activityText: {
+    ...typography.body,
+    color: colors.text,
+    marginTop: spacing.xs,
   },
   quickActions: {
     flexDirection: 'row',
@@ -596,130 +792,224 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.xs,
   },
   tabContent: {
-    paddingHorizontal: spacing.sm,
+    padding: spacing.md,
   },
-  zoneFooter: {
+  analyticsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
+  },
+  analyticsItem: {
     alignItems: 'center',
-    marginTop: spacing.sm,
   },
-  zoneActions: {
-    flexDirection: 'row',
+  analyticsValue: {
+    ...typography.h3,
+    color: colors.primary,
   },
-  actionButton: {
-    marginLeft: spacing.sm,
-  },
-  alertFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  alertType: {
+  analyticsLabel: {
     ...typography.caption,
     color: colors.textSecondary,
-    fontWeight: 'bold',
+    marginTop: spacing.xs,
   },
-  reportFooter: {
+  metricsList: {
+    marginTop: spacing.sm,
+  },
+  metricItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.mediumGray,
+  },
+  metricLabel: {
+    ...typography.body,
+    color: colors.text,
+  },
+  metricValue: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  userHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    ...typography.h4,
+    color: colors.text,
+  },
+  userEmail: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  userMeta: {
     marginTop: spacing.sm,
   },
-  reportActions: {
+  userMetaText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  roleChip: {
+    height: 28,
+  },
+  statusChip: {
+    height: 28,
+  },
+  activeChip: {
+    backgroundColor: colors.success,
+  },
+  inactiveChip: {
+    backgroundColor: colors.textSecondary,
+  },
+  roleChipText: {
+    color: colors.surface,
+    fontSize: 11,
+  },
+  statusChipText: {
+    color: colors.surface,
+    fontSize: 11,
+  },
+  zoneHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  zoneTitle: {
+    ...typography.h4,
+    color: colors.text,
+    flex: 1,
+  },
+  zoneDescription: {
+    ...typography.body,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  zoneType: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  alertHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  alertTitle: {
+    ...typography.h4,
+    color: colors.text,
+    flex: 1,
+  },
+  alertMessage: {
+    ...typography.body,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  alertMeta: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  priorityChip: {
+    height: 24,
+  },
+  priorityHigh: {
+    backgroundColor: colors.error,
+  },
+  priorityMedium: {
+    backgroundColor: colors.warning,
+  },
+  priorityLow: {
+    backgroundColor: colors.info,
+  },
+  priorityChipText: {
+    color: colors.surface,
+    fontSize: 10,
+  },
+  reportTitle: {
+    ...typography.h4,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  reportDescription: {
+    ...typography.body,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  reportStatus: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  auditHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  auditAction: {
+    ...typography.h4,
+    color: colors.text,
+    flex: 1,
+  },
+  auditTime: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  auditUser: {
+    ...typography.bodySmall,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  auditDetails: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    marginTop: spacing.xl,
+  },
+  emptyStateText: {
+    ...typography.h4,
+    color: colors.text,
+    marginTop: spacing.md,
   },
   modalContainer: {
     flex: 1,
     backgroundColor: colors.background,
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.mediumGray,
+  },
+  modalTitle: {
+    ...typography.h4,
+    color: colors.text,
+  },
   modalContent: {
     flex: 1,
     padding: spacing.md,
   },
-  inputSection: {
-    marginBottom: spacing.lg,
-  },
-  inputLabel: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  textInput: {
-    ...typography.body,
-    borderWidth: 1,
-    borderColor: colors.mediumGray,
-    borderRadius: 8,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    color: colors.text,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  typeButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  typeButton: {
-    padding: spacing.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-    minWidth: '30%',
-  },
-  activeTypeButton: {
-    backgroundColor: colors.primary,
-  },
-  typeButtonText: {
-    ...typography.bodySmall,
-    color: colors.primary,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  activeTypeButtonText: {
-    color: colors.surface,
-  },
-  priorityButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  priorityButton: {
-    padding: spacing.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.mediumGray,
-    backgroundColor: colors.surface,
-    flex: 1,
-    marginHorizontal: spacing.xs,
-  },
-  activePriorityButton: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  priorityButtonText: {
-    ...typography.bodySmall,
-    color: colors.text,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  activePriorityButtonText: {
-    color: colors.surface,
+  modalInput: {
+    marginBottom: spacing.md,
   },
   modalActions: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     padding: spacing.md,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.mediumGray,
-  },
-  modalButton: {
-    flex: 1,
-    marginHorizontal: spacing.xs,
   },
 });
 
