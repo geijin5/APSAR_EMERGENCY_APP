@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "build:android": "cd android && ./gradlew assembleRelease",
     "build:android-bundle": "cd android && ./gradlew bundleRelease",
-    "postinstall": "cd ios && pod install || true"
+    "postinstall": "node -e \"if (process.platform === 'darwin') { require('child_process').exec('cd ios && pod install', (err) => { if (err) console.log('Pod install skipped'); }); }\""
   },
   "dependencies": {
     "@react-navigation/native": "^6.1.9",
